@@ -17,77 +17,105 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import  express  from "express";
-import * as redis  from "redis";
-import MongoClient from 'mongodb';
-import cors from 'cors';
-import {FailsJWTSigner,FailsJWTVerifier, FailsAssets} from 'fails-components-security';
-import {FailsConfig} from 'fails-components-config';
+import express from 'express'
+import * as redis from 'redis'
+import MongoClient from 'mongodb'
+import cors from 'cors'
+import {
+  FailsJWTSigner,
+  FailsJWTVerifier,
+  FailsAssets
+} from 'fails-components-security'
+import { FailsConfig } from 'fails-components-config'
 
-import {AppHandler} from './apphandler.js';
+import { AppHandler } from './apphandler.js'
 
-let cfg=new FailsConfig();
+const initServer = async () => {
+  const cfg = new FailsConfig()
 
-const redisclient = redis.createClient({detect_buffers: true /* required by notescreen connection*/});
+  const redisclient = redis.createClient({
+    detect_buffers: true /* required by notescreen connection */
+  })
 
-let mongoclient = await MongoClient.connect(cfg.getMongoURL(),{useNewUrlParser: true , useUnifiedTopology: true });
-let mongodb =mongoclient.db(cfg.getMongoDB());
+  const mongoclient = await MongoClient.connect(cfg.getMongoURL(), {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  const mongodb = mongoclient.db(cfg.getMongoDB())
 
-let assets= new FailsAssets( { datadir: cfg.getDataDir(), dataurl: cfg.getURL('data'), savefile: cfg.getStatSaveType(), webservertype: cfg.getWSType(), privateKey: cfg.getStatSecret()});
+  const assets = new FailsAssets({
+    datadir: cfg.getDataDir(),
+    dataurl: cfg.getURL('data'),
+    savefile: cfg.getStatSaveType(),
+    webservertype: cfg.getWSType(),
+    privateKey: cfg.getStatSecret()
+  })
 
-let appsecurity=new FailsJWTSigner ({redis: redisclient, type: 'app', expiresIn: "10m", secret: cfg.getKeysSecret() });
-let lecturesecurity=new FailsJWTSigner ({redis: redisclient, type: 'lecture', expiresIn: "1m", secret:  cfg.getKeysSecret() });
-let notessecurity=new FailsJWTSigner ({redis: redisclient, type: 'notes', expiresIn: "1m", secret: cfg.getKeysSecret() });
-let appverifier= new FailsJWTVerifier({redis: redisclient, type: 'app'} );
+  const appsecurity = new FailsJWTSigner({
+    redis: redisclient,
+    type: 'app',
+    expiresIn: '10m',
+    secret: cfg.getKeysSecret()
+  })
+  const lecturesecurity = new FailsJWTSigner({
+    redis: redisclient,
+    type: 'lecture',
+    expiresIn: '1m',
+    secret: cfg.getKeysSecret()
+  })
+  const notessecurity = new FailsJWTSigner({
+    redis: redisclient,
+    type: 'notes',
+    expiresIn: '1m',
+    secret: cfg.getKeysSecret()
+  })
+  const appverifier = new FailsJWTVerifier({ redis: redisclient, type: 'app' })
 
+  const notepadurl = cfg.getURL('notepad')
+  const notesurl = cfg.getURL('notes')
 
+  const apphandler = new AppHandler({
+    signServerJwt: appsecurity.signToken,
+    signLectureJwt: lecturesecurity.signToken,
+    signNotesJwt: notessecurity.signToken,
+    redis: redisclient,
+    mongo: mongodb,
+    saveFile: assets.saveFile,
+    getFileURL: assets.getFileURL,
+    fixednotepadURL: notepadurl,
+    fixednotesURL: notesurl
+  })
 
-let notepadurl=cfg.getURL('notepad');
-let notesurl=cfg.getURL('notes');
+  const app = express()
 
+  app.use(express.urlencoded({ extended: true }))
+  app.use(express.json())
 
-var apphandler = new AppHandler({
-  signServerJwt: appsecurity.signToken,
-  signLectureJwt: lecturesecurity.signToken,
-  signNotesJwt: notessecurity.signToken,
-  redis: redisclient, mongo: mongodb,
-  saveFile: assets.saveFile,
-  getFileURL: assets.getFileURL,
-  fixednotepadURL: notepadurl,
-  fixednotesURL: notesurl,
+  // if (true) {
+  // only in development!
+  app.use(cors())
+  // }
 
-});
+  if (assets.localServer) {
+    // this is for static serving, may be in production a more clever alternative to circuvent the mime problem might be found
+    app.use(
+      cfg.getSDataDir(),
+      assets.getLocalVerifier(),
+      express.static(assets.datadir, {})
+    )
+  }
 
+  app.use(cfg.getSPath('app'), appverifier.express()) // secure all app routes
 
-var app = express();
+  apphandler.installHandlers(app)
 
-
-
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-
-
-
-if (true) // only in development!
-{
-  app.use(cors());
+  app.listen(cfg.getPort('app'), cfg.getHost(), function () {
+    console.log(
+      'Failsserver app handler listening port:',
+      cfg.getPort('app'),
+      ' host:',
+      cfg.getHost()
+    )
+  })
 }
-
-if (assets.localServer) {
-  // this is for static serving, may be in production a more clever alternative to circuvent the mime problem might be found
-  app.use(cfg.getSDataDir(), assets.getLocalVerifier(),
-    express.static(assets.datadir, {
-      
-    }));
-}
-
-app.use(cfg.getSPath('app'),appverifier.express()); //secure all app routes
-
-apphandler.installHandlers(app);
-
-
-app.listen(cfg.getPort('app'),cfg.getHost(),function() {
-    console.log('Failsserver app handler listening port:',cfg.getPort('app'),' host:',cfg.getHost());
-      });
-
+initServer()
