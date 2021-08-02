@@ -25,8 +25,8 @@ import {
   FailsJWTSigner,
   FailsJWTVerifier,
   FailsAssets
-} from '@martenrichter/fails-components-security'
-import { FailsConfig } from '@martenrichter/fails-components-config'
+} from '@fails-components/security'
+import { FailsConfig } from '@fails-components/config'
 
 import { AppHandler } from './apphandler.js'
 
