@@ -33,7 +33,7 @@ import { AppHandler } from './apphandler.js'
 const initServer = async () => {
   const cfg = new FailsConfig()
 
-  const redisclient = redis.createClient({
+  const redisclient = redis.createClient(cfg.redisPort(), cfg.redisHost(), {
     detect_buffers: true /* required by notescreen connection */
   })
 
@@ -93,10 +93,13 @@ const initServer = async () => {
 
   // if (true) {
   // only in development!
-  app.use(cors())
+  if (cfg.devmode) {
+    app.use(cors())
+  }
   // }
 
-  if (assets.localServer) {
+  if (assets.localServer()) {
+    console.log('Local server started', assets.localServer())
     // this is for static serving, may be in production a more clever alternative to circuvent the mime problem might be found
     app.use(
       cfg.getSDataDir(),
@@ -109,10 +112,12 @@ const initServer = async () => {
 
   apphandler.installHandlers(app)
 
-  app.listen(cfg.getPort('app'), cfg.getHost(), function () {
+  let port = cfg.getPort('app')
+  if (port === 443) port = 8080 // we are in production mode inside a container
+  app.listen(port, cfg.getHost(), function () {
     console.log(
       'Failsserver app handler listening port:',
-      cfg.getPort('app'),
+      port,
       ' host:',
       cfg.getHost()
     )
