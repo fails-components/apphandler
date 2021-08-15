@@ -14,4 +14,6 @@ COPY . .
 
 EXPOSE 8080
 
+VOLUME ["/usr/src/apphandler/files"]
+
 CMD [ "node", "src/server.js" ]
