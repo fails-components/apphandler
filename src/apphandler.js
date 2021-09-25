@@ -146,7 +146,7 @@ export class AppHandler {
 
         const details = await this.getLectureDetails(lectureuuid)
         if (!details) return res.status(404).send('not found')
-        console.log('patch request', req.body)
+        // console.log('patch request', req.body)
 
         try {
           const data = req.body
@@ -164,7 +164,7 @@ export class AppHandler {
             )
           }
           if (data.polls) {
-            console.log(data.polls)
+            // console.log(data.polls)
             if (
               !data.polls.id ||
               typeof data.polls.id !== 'string' ||
@@ -264,7 +264,7 @@ export class AppHandler {
         if (!isUUID(lectureuuid))
           return res.status(401).send('unauthorized uuid') // supply valid data
         const details = await this.getLectureDetails(lectureuuid)
-        console.log('details', details)
+        // console.log('details', details)
 
         if (details) {
           const toret = {
@@ -336,7 +336,7 @@ export class AppHandler {
         if (!req.token.role.includes('instructor'))
           return res.status(401).send('unauthorized')
         // ok folks, we get the user id and lecture id from the token
-        console.log('user data', req.token)
+        // console.log('user data', req.token)
         const lectureuuid = req.token.course.lectureuuid // used to identify the course
         const useruuid = req.token.user.useruuid
 
@@ -378,7 +378,7 @@ export class AppHandler {
             .sort({ 'lms.course_id': -1, coursetitle: 1, date: 1, title: 1 })
 
           const toret = await cursor.toArray()
-          console.log('toret', toret)
+          // console.log('toret', toret)
           return res.status(200).json(toret)
         } catch (error) {
           console.log('lectures error', error)
@@ -573,7 +573,7 @@ export class AppHandler {
             const cursor = boardscol.find({ uuid: req.body.fromuuid })
             while (await cursor.hasNext()) {
               const boardinfo = await cursor.next()
-              console.log('boardinfo', boardinfo)
+              // console.log('boardinfo', boardinfo)
               // ok we have one document so push it to redis, TODO think of sending the documents directly to clients?
               if (!boardinfo.board || !boardinfo.boarddata) continue // no valid data
               boards.push(boardinfo.board)
