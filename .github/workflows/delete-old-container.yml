@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Delete image sha
-	      uses: r26d/ghcr-delete-image-action@v1.1.0
+        uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
           name: ghcr-delete-image-dummy
@@ -27,7 +27,7 @@ jobs:
           untagged-keep-latest: 1
           tag-regex: sha-.
       - name: Delete image release candiate
-	      uses: r26d/ghcr-delete-image-action@v1.1.0
+        uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
           name: ghcr-delete-image-dummy
