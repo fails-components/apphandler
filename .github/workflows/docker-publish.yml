@@ -9,11 +9,11 @@ on:
   schedule:
     - cron: '30 3,12 * * *'
   push:
-    branches: [ master next ]
+    branches: [ master, next ]
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ master next ]
+    branches: [ master, next ]
   workflow_dispatch:
     inputs:
       logLevel:
