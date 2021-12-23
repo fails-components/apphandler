@@ -20,11 +20,13 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
       - name: Delete image sha
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ${{ env.IMAGE_NAME }}
+          name: ${{ github.repository }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
@@ -33,7 +35,7 @@ jobs:
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ${{ env.IMAGE_NAME }}
+          name: ${{ github.repository }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
