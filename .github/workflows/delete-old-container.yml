@@ -16,13 +16,16 @@ jobs:
   purge-image:
     name: Delete image from ghcr.io
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Delete image sha
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
           name: ghcr-delete-image-dummy
-          token: ${{ secrets.GHCR_TOKEN}}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
           tag-regex: sha-.
@@ -31,7 +34,7 @@ jobs:
         with:
           owner: ${{ github.repository_owner }}
           name: ghcr-delete-image-dummy
-          token: ${{ secrets.GHCR_TOKEN}}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
           tag-regex: \d\.\d.\d-rc\d
