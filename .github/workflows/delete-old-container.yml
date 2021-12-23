@@ -20,13 +20,14 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Get repository name
+        run: echo "REPOSITORY_NAME=$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')" >> $GITHUB_ENV
+        shell: bash
       - name: Delete image sha
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ${{ github.repository }}
+          name: ${{ env.REPOSITORY_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
@@ -35,7 +36,7 @@ jobs:
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ${{ github.repository }}
+          name: ${{ env.REPOSITORY_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
