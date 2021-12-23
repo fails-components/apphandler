@@ -13,23 +13,28 @@ on:
         description: 'Testing the container deletion mechanism'
 
 jobs:
-  clean-ghcr:
-    name: Delete old unused container images
+  purge-image:
+    name: Delete image from ghcr.io
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
-      - name: Delete 'dev' containers older than a week
-        uses: snok/container-retention-policy@v1
+      - name: Delete image sha
+	      uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
-          image-names: ${{ env.IMAGE_NAME }}
-          cut-off: A week ago UTC
-          account-type: org
-          org-name: fails-components
-          keep-at-least: 1
-          untagged-only: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          name: ghcr-delete-image-dummy
+          token: ${{ secrets.GHCR_TOKEN}}
+          tagged-keep-latest: 5
+          untagged-keep-latest: 1
+          tag-regex: sha-.
+      - name: Delete image release candiate
+	      uses: r26d/ghcr-delete-image-action@v1.1.0
+        with:
+          owner: ${{ github.repository_owner }}
+          name: ghcr-delete-image-dummy
+          token: ${{ secrets.GHCR_TOKEN}}
+          tagged-keep-latest: 5
+          untagged-keep-latest: 1
+          tag-regex: \d\.\d.\d-rc\d
 
 
  
