@@ -24,7 +24,7 @@ jobs:
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ghcr-delete-image-dummy
+          name: ${{ env.IMAGE_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
@@ -33,7 +33,7 @@ jobs:
         uses: r26d/ghcr-delete-image-action@v1.1.0
         with:
           owner: ${{ github.repository_owner }}
-          name: ghcr-delete-image-dummy
+          name: ${{ env.IMAGE_NAME }}
           token: ${{ secrets.GITHUB_TOKEN }}
           tagged-keep-latest: 5
           untagged-keep-latest: 1
