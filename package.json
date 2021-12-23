@@ -44,7 +44,7 @@
   ],
   "dependencies": {
     "@fails-components/config": ">=0.0.5",
-    "@fails-components/security": "0.0.2",
+    "@fails-components/security": ">=0.0.2",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "express-jwt": "^6.1.0",
