@@ -31,12 +31,17 @@ import { FailsConfig } from '@fails-components/config'
 import { AppHandler } from './apphandler.js'
 
 const initServer = async () => {
+  console.log('start initialize server')
+
   const cfg = new FailsConfig()
 
-  const redisclient = redis.createClient(cfg.redisPort(), cfg.redisHost(), {
-    detect_buffers: true /* required by notescreen connection */,
+  const redisclient = redis.createClient({
+    socket: { port: cfg.redisPort(), host: cfg.redisHost() },
     password: cfg.redisPass()
   })
+
+  await redisclient.connect()
+  console.log('redisclient connected')
 
   const mongoclient = await MongoClient.connect(cfg.getMongoURL(), {
     useNewUrlParser: true,

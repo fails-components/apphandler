@@ -18,7 +18,6 @@
 */
 
 import { v4 as uuidv4, validate as isUUID } from 'uuid'
-import { promisify } from 'util'
 import multer from 'multer'
 import { createHash } from 'crypto'
 
@@ -134,6 +133,29 @@ export class AppHandler {
           .json({ token: await this.signNotesJwt(lecturetokendata) })
       }.bind(this)
     )
+
+    app.post('/app/lecture/auth', async (req, res) => {
+      if (!req.token.role.includes('instructor'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+      if (!isUUID(lectureuuid)) return res.status(401).send('unauthorized uuid') // supply valid data
+
+      const user = req.token.user
+
+      const payload = { uuid: lectureuuid, user: user }
+      if (!req.body.id || !/[A-Za-z0-9+/]/g.test(req.body.id))
+        return res.status(400).send('malformed id')
+
+      const id = req.body.id
+      // now we check if the key is in our redis db
+      const ex = await this.redis.exists('auth::' + id)
+      if (ex[0]) return res.status(400).send('unknown id')
+      console.log('redis publish for ', id, payload)
+      // ok it is legitimate, so send it please to redis pubsub
+      this.redis.publish('auth::' + id, JSON.stringify(payload))
+
+      res.status(200).json({ message: 'success' })
+    })
 
     app.patch(
       '/app/lecture',
@@ -749,7 +771,6 @@ export class AppHandler {
   async getLectureDetails(uuid) {
     try {
       const lecturescol = this.mongo.collection('lectures')
-
       const andquery = []
 
       andquery.push({ uuid: uuid })
@@ -760,10 +781,9 @@ export class AppHandler {
 
       if (lecturedoc) {
         // now ask redis, if it is running
-        const client = this.redis
-        const scard = promisify(client.scard).bind(client)
-
-        const numberclients = await scard('lecture:' + uuid + ':notescreens') // TODO fix me inactive clients! and notescreens
+        const numberclients = await this.redis.sCard(
+          'lecture:' + uuid + ':notescreens'
+        ) // TODO fix me inactive clients! and notescreens
 
         if (numberclients > 0) lecturedoc.running = true
         else lecturedoc.running = false
