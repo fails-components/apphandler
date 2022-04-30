@@ -1,6 +1,6 @@
 {
   "name": "@fails-components/apphandler",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Supplies server side app handling",
   "author": "Marten Richter",
   "license": "AGPL-3.0-or-later",
@@ -43,7 +43,7 @@
   ],
   "dependencies": {
     "@fails-components/config": "^1.0.1",
-    "@fails-components/security": "^1.0.1",
+    "@fails-components/security": "^1.0.2",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "express-jwt": "^6.1.0",
