@@ -116,7 +116,7 @@ const initServer = async () => {
 
   app.use(cfg.getSPath('app'), appverifier.express()) // secure all app routes
 
-  apphandler.installHandlers(app)
+  apphandler.installHandlers(cfg.getSPath('app'), app)
 
   let port = cfg.getPort('app')
   if (port === 443) port = 8080 // we are in production mode inside a container
