@@ -54,7 +54,8 @@ const initServer = async () => {
     dataurl: cfg.getURL('data'),
     savefile: cfg.getStatSaveType(),
     webservertype: cfg.getWSType(),
-    privateKey: cfg.getStatSecret()
+    privateKey: cfg.getStatSecret(),
+    swift: cfg.getSwift()
   })
 
   const appsecurity = new FailsJWTSigner({
@@ -103,16 +104,6 @@ const initServer = async () => {
     app.use(cors())
   }
   // }
-
-  if (assets.localServer()) {
-    console.log('Local server started', assets.localServer())
-    // this is for static serving, may be in production a more clever alternative to circuvent the mime problem might be found
-    app.use(
-      cfg.getSDataDir(),
-      assets.getLocalVerifier(),
-      express.static(assets.datadir, {})
-    )
-  }
 
   app.use(cfg.getSPath('app'), appverifier.express()) // secure all app routes
 
