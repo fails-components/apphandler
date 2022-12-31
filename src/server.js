@@ -35,12 +35,28 @@ const initServer = async () => {
 
   const cfg = new FailsConfig()
 
-  const redisclient = redis.createClient({
-    socket: { port: cfg.redisPort(), host: cfg.redisHost() },
-    password: cfg.redisPass()
-  })
+  let rediscl
+  let redisclusterconfig
+  if (cfg.getRedisClusterConfig)
+    redisclusterconfig = cfg.getRedisClusterConfig()
+  if (!redisclusterconfig) {
+    console.log(
+      'Connect to redis database with host:',
+      cfg.redisHost(),
+      'and port:',
+      cfg.redisPort()
+    )
+    rediscl = redis.createClient({
+      socket: { port: cfg.redisPort(), host: cfg.redisHost() },
+      password: cfg.redisPass()
+    })
+  } else {
+    // cluster case
+    console.log('Connect to redis cluster with config:', redisclusterconfig)
+    rediscl = redis.createCluster(redisclusterconfig)
+  }
 
-  await redisclient.connect()
+  await rediscl.connect()
   console.log('redisclient connected')
 
   const mongoclient = await MongoClient.connect(cfg.getMongoURL(), {
@@ -61,24 +77,24 @@ const initServer = async () => {
   })
 
   const appsecurity = new FailsJWTSigner({
-    redis: redisclient,
+    redis: rediscl,
     type: 'app',
     expiresIn: '10m',
     secret: cfg.getKeysSecret()
   })
   const lecturesecurity = new FailsJWTSigner({
-    redis: redisclient,
+    redis: rediscl,
     type: 'lecture',
     expiresIn: '1m',
     secret: cfg.getKeysSecret()
   })
   const notessecurity = new FailsJWTSigner({
-    redis: redisclient,
+    redis: rediscl,
     type: 'notes',
     expiresIn: '1m',
     secret: cfg.getKeysSecret()
   })
-  const appverifier = new FailsJWTVerifier({ redis: redisclient, type: 'app' })
+  const appverifier = new FailsJWTVerifier({ redis: rediscl, type: 'app' })
 
   const notepadurl = cfg.getURL('notepad')
   const notesurl = cfg.getURL('notes')
@@ -87,7 +103,7 @@ const initServer = async () => {
     signServerJwt: appsecurity.signToken,
     signLectureJwt: lecturesecurity.signToken,
     signNotesJwt: notessecurity.signToken,
-    redis: redisclient,
+    redis: rediscl,
     mongo: mongodb,
     saveFile: assets.saveFile,
     getFileURL: assets.getFileURL,
