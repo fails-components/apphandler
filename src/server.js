@@ -49,6 +49,8 @@ const initServer = async () => {
   })
   const mongodb = mongoclient.db(cfg.getMongoDB())
 
+  let ready = false
+
   const assets = new FailsAssets({
     datadir: cfg.getDataDir(),
     dataurl: cfg.getURL('data'),
@@ -105,6 +107,16 @@ const initServer = async () => {
   }
   // }
 
+  // Kubernetes livelyness and readyness probes
+  app.get('/ready', (req, res) => {
+    if (ready) return res.send('Ready')
+    else res.status(500).send('Not ready')
+  })
+
+  app.get('/health', async (req, res) => {
+    res.send('Healthy')
+  })
+
   app.use(cfg.getSPath('app'), appverifier.express()) // secure all app routes
 
   apphandler.installHandlers(cfg.getSPath('app'), app)
@@ -118,6 +130,7 @@ const initServer = async () => {
       ' host:',
       cfg.getHost()
     )
+    ready = true
   })
 }
 initServer()
