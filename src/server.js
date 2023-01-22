@@ -73,7 +73,8 @@ const initServer = async () => {
     savefile: cfg.getStatSaveType(),
     webservertype: cfg.getWSType(),
     privateKey: cfg.getStatSecret(),
-    swift: cfg.getSwift()
+    swift: cfg.getSwift(),
+    s3: cfg.getS3()
   })
 
   const appsecurity = new FailsJWTSigner({
