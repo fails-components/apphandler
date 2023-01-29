@@ -613,6 +613,14 @@ export class AppHandler {
         if (!req.files.file || !req.files.filethumbnail || !cmd.filename)
           return res.status(401).send('malformed request')
 
+        const supportedMime = ['image/jpeg', 'image/png']
+
+        if (
+          !supportedMime.includes(req.files.file[0].mimetype) ||
+          !supportedMime.includes(req.files.file[0].mimetype)
+        )
+          return res.status(401).send('unsupported mime type')
+
         try {
           const picturehash = createHash('sha256')
           const thumbnailhash = createHash('sha256')
@@ -631,7 +639,7 @@ export class AppHandler {
           await this.saveFile(
             req.files.filethumbnail[0].buffer,
             thumbsha256,
-            req.files.file[0].mimetype
+            req.files.filethumbnail[0].mimetype
           )
 
           const pictinfo = {
@@ -726,7 +734,7 @@ export class AppHandler {
 
           return res.status(200).json({}) // no return just success
         } catch (error) {
-          console.log('picture conversion error', error)
+          console.log('upload pdf error', error)
           return res.status(500).send('error converting')
         }
       }
