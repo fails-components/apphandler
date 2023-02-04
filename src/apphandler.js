@@ -73,6 +73,7 @@ export class AppHandler {
         course: oldtoken.course,
         user: oldtoken.user,
         role: oldtoken.role,
+        appversion: oldtoken.appversion,
         context: oldtoken.context,
         maxrenew: oldtoken.maxrenew - 1
       }
@@ -93,6 +94,7 @@ export class AppHandler {
         purpose: 'notepad',
         name: 'Primary Notebook',
         lectureuuid: lectureuuid,
+        appversion: oldtoken.appversion,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         notepadhandler: this.notepadURL(lectureuuid)
@@ -114,6 +116,7 @@ export class AppHandler {
         purpose: 'notes',
         name: 'Notes',
         lectureuuid: lectureuuid,
+        appversion: oldtoken.appversion,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         noteshandler: this.notesURL(lectureuuid)
@@ -129,7 +132,11 @@ export class AppHandler {
 
       const user = req.token.user
 
-      const payload = { uuid: lectureuuid, user: user }
+      const payload = {
+        uuid: lectureuuid,
+        user: user,
+        appversion: req.token.appversion
+      }
       if (!req.body.id || !/[A-Za-z0-9+/]/g.test(req.body.id))
         return res.status(400).send('malformed id')
 
@@ -142,6 +149,55 @@ export class AppHandler {
       this.redis.publish('auth::' + id, JSON.stringify(payload))
 
       res.status(200).json({ message: 'success' })
+    })
+
+    app.patch(path + '/lecture/course', async (req, res) => {
+      if (!req.token.role.includes('instructor'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+      if (!isUUID(lectureuuid)) return res.status(400).send('unauthorized uuid') // supply valid data
+
+      const details = await this.getLectureDetails(lectureuuid)
+      if (!details) return res.status(404).send('not found')
+      // console.log('patch request', req.body)
+
+      if (!details.lms.iss) return res.status(404).send('lect without iss')
+      if (!details.lms.course_id)
+        return res.status(404).send('lect without course_id')
+
+      try {
+        const data = req.body
+
+        const lecturescol = this.mongo.collection('lectures')
+
+        if (data.appversion) {
+          if (
+            data.appversion !== 'stable' &&
+            data.appversion !== 'experimental'
+          )
+            res.status(400).send('malformed request: unknown appversion')
+          await lecturescol.updateMany(
+            {
+              $and: [
+                {
+                  'lms.iss': details.lms.iss
+                },
+                {
+                  'lms.course_id': details.lms.course_id
+                }
+              ]
+            },
+            {
+              $set: { appversion: data.appversion },
+              $currentDate: { lastaccess: true }
+            }
+          )
+        }
+        return res.status(200).json({})
+      } catch (error) {
+        console.log('lecture patch db error', error)
+        return res.status(500).send('db error')
+      }
     })
 
     app.patch(path + '/lecture', async (req, res) => {
@@ -161,7 +217,7 @@ export class AppHandler {
 
         if (data.date) {
           // we like to change the date
-          lecturescol.updateOne(
+          await lecturescol.updateOne(
             { uuid: lectureuuid },
             {
               $set: { date: new Date(data.date) },
@@ -651,7 +707,7 @@ export class AppHandler {
 
           const lecturescol = this.mongo.collection('lectures')
 
-          lecturescol.updateOne(
+          await lecturescol.updateOne(
             { uuid: lectureuuid },
             {
               $addToSet: { pictures: pictinfo },
@@ -694,7 +750,7 @@ export class AppHandler {
                             if (details.backgroundpdf.sha) {bgpdf.sha=details.backgroundpdf.sha; none=false;}
                             if (none)  bgpdf.none=true; */
 
-            lecturescol.updateOne(
+            await lecturescol.updateOne(
               { uuid: lectureuuid },
               {
                 $set: { 'backgroundpdf.none': true },
@@ -720,7 +776,7 @@ export class AppHandler {
             'application/pdf'
           )
 
-          lecturescol.updateOne(
+          await lecturescol.updateOne(
             { uuid: lectureuuid },
             {
               $unset: { 'backgroundpdf.none': '' },
