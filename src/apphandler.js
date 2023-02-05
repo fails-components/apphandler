@@ -370,10 +370,10 @@ export class AppHandler {
               none = false
             }
             if (details.backgroundpdf.sha) {
-              bgpdf.sha = details.backgroundpdf.sha
+              bgpdf.sha = details.backgroundpdf.sha.buffer.toString('hex')
               none = false
               bgpdf.url = this.getFileURL(
-                details.backgroundpdf.sha,
+                details.backgroundpdf.sha.buffer,
                 'application/pdf'
               )
             }
@@ -502,6 +502,8 @@ export class AppHandler {
           lecturedoc.backgroundpdf.sha,
           'application/pdf'
         )
+        lecturedoc.backgroundpdf.sha =
+          lecturedoc.backgroundpdf.sha.buffer.toString('hex')
       }
 
       boards = (await boards)
