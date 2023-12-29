@@ -74,6 +74,7 @@ export class AppHandler {
         user: oldtoken.user,
         role: oldtoken.role,
         appversion: oldtoken.appversion,
+        features: oldtoken.features,
         context: oldtoken.context,
         maxrenew: oldtoken.maxrenew - 1
       }
@@ -95,6 +96,7 @@ export class AppHandler {
         name: 'Primary Notebook',
         lectureuuid: lectureuuid,
         appversion: oldtoken.appversion,
+        features: oldtoken.features,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         notepadhandler: this.notepadURL(lectureuuid)
@@ -117,6 +119,7 @@ export class AppHandler {
         name: 'Notes',
         lectureuuid: lectureuuid,
         appversion: oldtoken.appversion,
+        features: oldtoken.features,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         noteshandler: this.notesURL(lectureuuid)
@@ -135,7 +138,8 @@ export class AppHandler {
       const payload = {
         uuid: lectureuuid,
         user: user,
-        appversion: req.token.appversion
+        appversion: req.token.appversion,
+        features: req.token.features
       }
       if (!req.body.id || !/[A-Za-z0-9+/]/g.test(req.body.id))
         return res.status(400).send('malformed id')
@@ -189,6 +193,30 @@ export class AppHandler {
             },
             {
               $set: { appversion: data.appversion },
+              $currentDate: { lastaccess: true }
+            }
+          )
+        }
+        if (data.features) {
+          const knownFeatures = ['avbroadcast']
+          if (
+            !Array.isArray(data.features) ||
+            data.features.some((el) => !knownFeatures.includes(el))
+          )
+            res.status(400).send('malformed request: features')
+          await lecturescol.updateMany(
+            {
+              $and: [
+                {
+                  'lms.iss': details.lms.iss
+                },
+                {
+                  'lms.course_id': details.lms.course_id
+                }
+              ]
+            },
+            {
+              $set: { features: data.features },
               $currentDate: { lastaccess: true }
             }
           )
