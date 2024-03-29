@@ -1,4 +1,4 @@
-FROM node:16-bullseye
+FROM node:16-bookworm-slim
 
 ARG ENV
 
