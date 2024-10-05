@@ -1,4 +1,4 @@
-FROM node:16-bookworm-slim
+FROM node:20-bookworm-slim
 
 ARG ENV
 
