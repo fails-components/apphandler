@@ -198,7 +198,7 @@ export class AppHandler {
           )
         }
         if (data.features) {
-          const knownFeatures = ['avbroadcast']
+          const knownFeatures = ['avbroadcast', 'jupyter']
           if (
             !Array.isArray(data.features) ||
             data.features.some((el) => !knownFeatures.includes(el))
