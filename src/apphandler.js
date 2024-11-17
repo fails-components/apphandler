@@ -78,7 +78,8 @@ export class AppHandler {
         context: oldtoken.context,
         maxrenew: oldtoken.maxrenew - 1
       }
-      if (!oldtoken.maxrenew || !(oldtoken.maxrenew > 0)) return {}
+      if (!oldtoken.maxrenew || !(oldtoken.maxrenew > 0))
+        return res.status(401).send('maximum renewal exceeded')
       res.status(200).json({ token: await this.signServerJwt(newtoken) })
     })
 
