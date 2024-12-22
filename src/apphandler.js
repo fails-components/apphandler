@@ -18,8 +18,6 @@
 */
 
 import { v4 as uuidv4, validate as isUUID } from 'uuid'
-import multer from 'multer'
-import { createHash } from 'crypto'
 
 export class AppHandler {
   constructor(args) {
@@ -28,12 +26,11 @@ export class AppHandler {
     this.signLectureJwt = args.signLectureJwt
     this.signNotesJwt = args.signNotesJwt
     this.signServerJwt = args.signServerJwt
-    this.saveFile = args.saveFile
+    this.handleFileUpload = args.handleFileUpload
     this.getFileURL = args.getFileURL
     this.fixednotepadURL = args.fixednotepadURL
     this.fixednotesURL = args.fixednotesURL
-
-    this.upload = multer({ limits: { fileSize: 20000000, files: 2 } })
+    this.maxFileSize = 30000000
   }
 
   notepadURL(lectureuuid) {
@@ -680,152 +677,117 @@ export class AppHandler {
       res.status(200).json({ message: 'success' })
     })
 
-    app.post(
-      path + '/lecture/picture',
-      this.upload.fields([
-        { name: 'file', maxCount: 1 },
-        { name: 'filethumbnail', maxCount: 1 }
-      ]),
-      async (req, res) => {
-        if (!req.token.role.includes('instructor'))
-          return res.status(401).send('unauthorized')
-        const lectureuuid = req.token.course.lectureuuid
-        if (!isUUID(lectureuuid))
-          return res.status(401).send('unauthorized uuid') // supply valid data
-        // now we have to calcuate SHA256 data for picture and thumbnail
-        // console.log("req files",req.files);
-        // console.log("picture",req.files.file);
-        // console.log("picture thumbnail",req.files.filethumbnail);
-        const cmd = JSON.parse(req.body.data)
-        if (!req.files.file || !req.files.filethumbnail || !cmd.filename)
-          return res.status(401).send('malformed request')
+    app.post(path + '/lecture/picture', async (req, res) => {
+      if (!req.token.role.includes('instructor'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+      if (!isUUID(lectureuuid)) return res.status(401).send('unauthorized uuid') // supply valid data
 
-        const supportedMime = ['image/jpeg', 'image/png']
-
-        if (
-          !supportedMime.includes(req.files.file[0].mimetype) ||
-          !supportedMime.includes(req.files.file[0].mimetype)
+      try {
+        const body = {}
+        const [
+          { sha256: pictsha256, mimeType: pictMimeType },
+          { sha256: thumbsha256 }
+        ] = await this.handleFileUpload(
+          req,
+          body,
+          { filename: true },
+          {},
+          ['file', 'filethumbnail'],
+          this.maxFileSize,
+          ['image/jpeg', 'image/png']
         )
-          return res.status(401).send('unsupported mime type')
+        if (!body.filename) return res.status(401).send('malformed request')
 
-        try {
-          const picturehash = createHash('sha256')
-          const thumbnailhash = createHash('sha256')
+        const pictinfo = {
+          name: body.filename,
+          mimetype: pictMimeType,
+          sha: pictsha256,
+          tsha: thumbsha256
+        } // attention field order matters for the addtoset operation!
 
-          picturehash.update(req.files.file[0].buffer)
-          thumbnailhash.update(req.files.filethumbnail[0].buffer)
+        const lecturescol = this.mongo.collection('lectures')
 
-          const pictsha256 = picturehash.digest()
-          const thumbsha256 = thumbnailhash.digest()
+        await lecturescol.updateOne(
+          { uuid: lectureuuid },
+          {
+            $addToSet: { pictures: pictinfo },
+            $currentDate: { lastaccess: true }
+          }
+        )
 
-          await this.saveFile(
-            req.files.file[0].buffer,
-            pictsha256,
-            req.files.file[0].mimetype
-          )
-          await this.saveFile(
-            req.files.filethumbnail[0].buffer,
-            thumbsha256,
-            req.files.filethumbnail[0].mimetype
-          )
-
-          const pictinfo = {
-            name: cmd.filename,
-            mimetype: req.files.file[0].mimetype,
-            sha: pictsha256,
-            tsha: thumbsha256
-          } // attention field order matters for the addtoset operation!
-
-          const lecturescol = this.mongo.collection('lectures')
-
-          await lecturescol.updateOne(
-            { uuid: lectureuuid },
-            {
-              $addToSet: { pictures: pictinfo },
-              $currentDate: { lastaccess: true }
-            }
-          )
-
-          return res.status(200).json({}) // no return just success
-        } catch (error) {
-          console.log('picture conversion error', error)
-          return res.status(500).send('error converting')
-        }
+        return res.status(200).json({}) // no return just success
+      } catch (error) {
+        console.log('picture conversion error', error)
+        return res.status(500).send('error converting ' + error)
       }
-    )
+    })
 
-    app.post(
-      path + '/lecture/bgpdf',
-      this.upload.fields([{ name: 'file', maxCount: 1 }]),
-      async (req, res) => {
-        if (!req.token.role.includes('instructor'))
-          return res.status(401).send('unauthorized')
-        const lectureuuid = req.token.course.lectureuuid
-        if (!isUUID(lectureuuid))
-          return res.status(401).send('unauthorized uuid') // supply valid data
-        // now we have to calcuate SHA256 data for bgpdf
-        // console.log("req files",req.files);
-        // console.log("bgpdf",req.files.file);
-        // first we have to check, if the pdf is already locked by the lecture system
-        const details = await this.getLectureDetails(lectureuuid)
-        if (!details) return res.status(404).send('not found')
-        if (details.backgroundpdfuse)
-          return res.status(401).send('background pdf is in use')
+    app.post(path + '/lecture/bgpdf', async (req, res) => {
+      if (!req.token.role.includes('instructor'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+      if (!isUUID(lectureuuid)) return res.status(401).send('unauthorized uuid') // supply valid data
 
-        try {
-          const lecturescol = this.mongo.collection('lectures')
-          const cmd = JSON.parse(req.body.data)
-          if (cmd.none) {
-            // we have to reset
-            /* if (details.backgroundpdf.name) {bgpdf.name=details.backgroundpdf.name; none=false;}
+      // first we have to check, if the pdf is already locked by the lecture system
+      const details = await this.getLectureDetails(lectureuuid)
+      if (!details) return res.status(404).send('not found')
+      if (details.backgroundpdfuse)
+        return res.status(401).send('background pdf is in use')
+
+      try {
+        const body = {}
+        const [{ sha256: pdfsha256 = undefined } = {}] =
+          await this.handleFileUpload(
+            req,
+            body,
+            { filename: true },
+            { none: true },
+            ['file'],
+            this.maxFileSize,
+            ['application/pdf']
+          )
+
+        const lecturescol = this.mongo.collection('lectures')
+        if (body.none) {
+          // we have to reset
+          /* if (details.backgroundpdf.name) {bgpdf.name=details.backgroundpdf.name; none=false;}
                             if (details.backgroundpdf.sha) {bgpdf.sha=details.backgroundpdf.sha; none=false;}
                             if (none)  bgpdf.none=true; */
 
-            await lecturescol.updateOne(
-              { uuid: lectureuuid },
-              {
-                $set: { 'backgroundpdf.none': true },
-                $unset: { 'backgroundpdf.name': '', 'backgroundpdf.sha': '' },
-                $currentDate: { lastaccess: true }
-              }
-            )
-            return res.status(200).json({}) // no return just success
-          }
-
-          if (!req.files.file || !cmd.filename)
-            return res.status(401).send('malformed request')
-
-          const pdfhash = createHash('sha256')
-
-          pdfhash.update(req.files.file[0].buffer)
-
-          const pdfsha256 = pdfhash.digest()
-
-          await this.saveFile(
-            req.files.file[0].buffer,
-            pdfsha256,
-            'application/pdf'
-          )
-
           await lecturescol.updateOne(
             { uuid: lectureuuid },
             {
-              $unset: { 'backgroundpdf.none': '' },
-              $set: {
-                'backgroundpdf.name': cmd.filename,
-                'backgroundpdf.sha': pdfsha256
-              },
+              $set: { 'backgroundpdf.none': true },
+              $unset: { 'backgroundpdf.name': '', 'backgroundpdf.sha': '' },
               $currentDate: { lastaccess: true }
             }
           )
-
+          if (details.backgroundpdf) {
+            const pdf = [details.backgroundpdf.sha.toString('hex')]
+            await this.redis.sAdd('checkdel:pdf', pdf)
+          }
           return res.status(200).json({}) // no return just success
-        } catch (error) {
-          console.log('upload pdf error', error)
-          return res.status(500).send('error converting')
         }
+
+        await lecturescol.updateOne(
+          { uuid: lectureuuid },
+          {
+            $unset: { 'backgroundpdf.none': '' },
+            $set: {
+              'backgroundpdf.name': body.filename,
+              'backgroundpdf.sha': pdfsha256
+            },
+            $currentDate: { lastaccess: true }
+          }
+        )
+
+        return res.status(200).json({}) // no return just success
+      } catch (error) {
+        console.log('upload pdf error', error)
+        return res.status(500).send('error converting ' + error)
       }
-    )
+    })
   }
 
   async getLectureDetails(uuid) {

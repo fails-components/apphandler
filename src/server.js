@@ -106,7 +106,7 @@ const initServer = async () => {
     signNotesJwt: notessecurity.signToken,
     redis: rediscl,
     mongo: mongodb,
-    saveFile: assets.saveFile,
+    handleFileUpload: assets.handleFileUpload,
     getFileURL: assets.getFileURL,
     fixednotepadURL: notepadurl,
     fixednotesURL: notesurl
