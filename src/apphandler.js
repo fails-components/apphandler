@@ -251,13 +251,115 @@ export class AppHandler {
             }
           )
         }
+        if (data.ipynbs) {
+          if (
+            !data.ipynbs.id ||
+            typeof data.ipynbs.id !== 'string' ||
+            data.ipynbs.id.length > 20
+          )
+            return res.status(400).send('malformed request')
+
+          const pendingupdates = []
+          const changes = {
+            $currentDate: { lastaccess: true },
+            $set: {}
+          }
+          let changed = false
+          if (typeof data.ipynbs.presentDownload !== 'undefined') {
+            changes.$set['ipynbs.$[notebook].presentDownload'] =
+              data.ipynbs.presentDownload
+            changed = true
+          }
+          if (typeof data.ipynbs.name !== 'undefined') {
+            changes.$set['ipynbs.$[notebook].name'] = data.ipynbs.name
+            changed = true
+          }
+          if ('note' in data.ipynbs) {
+            changes.$set['ipynbs.$[notebook].note'] = data.ipynbs.note
+            changed = true
+          }
+          if (changed) {
+            pendingupdates.push(
+              lecturescol.updateOne({ uuid: lectureuuid }, changes, {
+                arrayFilters: [{ 'notebook.id': data.ipynbs.id }]
+              })
+            )
+          }
+
+          if (data.ipynbs.applets) {
+            data.ipynbs.applets.forEach((applet) => {
+              if (
+                typeof applet.presentToStudents !== 'undefined' &&
+                applet.id
+              ) {
+                pendingupdates.push(
+                  lecturescol.updateOne(
+                    { uuid: lectureuuid },
+                    {
+                      $set: {
+                        'ipynbs.$[notebook].applets.$[applet].presentToStudents':
+                          applet.presentToStudents
+                      },
+                      $currentDate: { lastaccess: true }
+                    },
+                    {
+                      arrayFilters: [
+                        { 'notebook.id': data.ipynbs.id },
+                        { 'applet.appid': applet.id }
+                      ]
+                    }
+                  )
+                )
+              }
+            })
+          }
+          await Promise.all(pendingupdates)
+          /* {
+            name: el.name,
+            id: el.id,
+            mimetype: el.mimetype,
+            filename: el.filename,
+            date: el.data,
+            presentDownload: el.presentDownload,
+            applets: el.applets?.map?.((applet) => ({
+              appid: applet.appid,
+              appname: applet.appname,
+              presentToStudents: applet.presentToStudents
+            }))
+          } */
+        }
+        if (data.removeipynb) {
+          if (data.ipynbs) return res.status(400).send('malformed request') // please not simultaneously
+          if (
+            !data.removeipynb.id ||
+            typeof data.removeipynb.id !== 'string' ||
+            data.removeipynb.id.length > 20
+          )
+            return res.status(400).send('malformed request')
+          await lecturescol.updateOne(
+            { uuid: lectureuuid },
+            {
+              $currentDate: { lastaccess: true },
+              $pull: { ipynbs: { id: data.removeipynb.id } }
+            }
+          )
+          const removed = details?.ipynbs?.find(
+            (el) => el.id === data.removeipynb.id
+          )
+          if (removed?.sha) {
+            const ipynb = [removed.sha.toString('hex')]
+            await this.redis.sAdd('checkdel:ipynb', ipynb)
+          }
+        }
         if (data.polls) {
           // console.log(data.polls)
           if (
             !data.polls.id ||
             typeof data.polls.id !== 'string' ||
-            data.polls.id > 20 ||
-            (!data.polls.name && !('multi' in data.polls))
+            data.polls.id.length > 20 ||
+            (!data.polls.name &&
+              !('multi' in data.polls) &&
+              !('note' in data.polls))
           )
             return res.status(400).send('malformed request')
 
@@ -297,6 +399,8 @@ export class AppHandler {
             const tochange = { $set: {}, $currentDate: { lastaccess: true } }
             if (data.polls.name)
               tochange.$set['polls.$[pollchange].name'] = data.polls.name
+            if ('note' in data.polls)
+              tochange.$set['polls.$[pollchange].note'] = data.polls.note
             if ('multi' in data.polls)
               tochange.$set['polls.$[pollchange].multi'] = data.polls.multi
             await lecturescol.updateOne({ uuid: lectureuuid }, tochange, {
@@ -309,7 +413,7 @@ export class AppHandler {
           if (
             !data.removepolls.id ||
             typeof data.removepolls.id !== 'string' ||
-            data.removepolls.id > 20
+            data.removepolls.id.length > 20
           )
             return res.status(400).send('malformed request')
           const tochange = { $currentDate: { lastaccess: true } }
@@ -364,7 +468,40 @@ export class AppHandler {
         if (details.date) {
           toret.date = details.date
         }
-        // TODO add additional fields for instructor such as pools, pictures, pdfbackground etc.
+        if (details.ipynbs) {
+          // 'application/x-ipynb+json'
+          const instructor = req.token.role.includes('instructor')
+          const retipynbs = details.ipynbs
+            .map((el) => {
+              return {
+                name: el.name,
+                id: el.id,
+                sha: el.sha,
+                mimetype: el.mimetype,
+                filename: el.filename,
+                date: el.data,
+                presentDownload: el.presentDownload,
+                note: el.note,
+                applets: el.applets
+                  ?.map?.((applet) => ({
+                    appid: applet.appid,
+                    appname: applet.appname,
+                    presentToStudents: applet.presentToStudents
+                  }))
+                  ?.filter?.((applet) => applet.presentToStudents || instructor)
+              }
+            })
+            .filter(
+              (el) => instructor || el.presentDownload || el.applets?.length > 0
+            )
+            .map((el) => ({
+              sha: el.sha.buffer.toString('hex'),
+              ...el,
+              url: el.sha && this.getFileURL(el.sha.buffer, el.mimetype)
+            }))
+          toret.ipynbs = retipynbs
+        }
+        // add additional fields for instructor such as pools, pictures, pdfbackground etc.
         if (req.token.role.includes('instructor')) {
           // fields only available for the instructors
           if (details.pictures) {
@@ -572,10 +709,14 @@ export class AppHandler {
       if (req.body.what === 'polls' || req.body.what === 'all') {
         filter = { ...filter, polls: 1 }
       }
+      if (req.body.what === 'ipynbs' || req.body.what === 'all') {
+        filter = { ...filter, ipynbs: 1 }
+      }
       if (req.body.what === 'lecture' || req.body.what === 'all') {
         filter = {
           ...filter,
           usedpictures: 1,
+          usedipynbs: 1,
           backgroundpdfuse: 1,
           backgroundpdf: 1,
           boards: 1,
@@ -632,6 +773,24 @@ export class AppHandler {
           )
         }
       }
+      if (req.body.what === 'ipynbs' || req.body.what === 'all') {
+        if (lecturedoc.ipynbs) {
+          const toremove = lecturedoc.ipynbs.map((el) => el.sha)
+          promis.push(
+            lecturescol.updateOne(
+              { uuid: lectureuuid },
+              { $pull: { ipynbs: { sha: { $in: toremove } } } }
+            )
+          )
+          // now we removed dublettes, we can insert the current ones
+          promis.push(
+            lecturescol.updateOne(
+              { uuid: lectureuuid },
+              { $push: { ipynbs: { $each: lecturedoc.ipynbs } } }
+            )
+          )
+        }
+      }
       if (req.body.what === 'lecture' || req.body.what === 'all') {
         const set = {}
         if (lecturedoc.backgroundpdfuse) set.backgroundpdfuse = 1
@@ -640,6 +799,7 @@ export class AppHandler {
         if (lecturedoc.boardsavetime)
           set.boardsavetime = lecturedoc.boardsavetime
         if (lecturedoc.usedpictures) set.usedpictures = lecturedoc.usedpictures
+        if (lecturedoc.usedipynbs) set.usedipynbs = lecturedoc.ipynbs
 
         const boards = []
         if (lecturedoc.boards) {
@@ -786,6 +946,89 @@ export class AppHandler {
       } catch (error) {
         console.log('upload pdf error', error)
         return res.status(500).send('error converting ' + error)
+      }
+    })
+
+    app.post(path + '/lecture/ipynb', async (req, res) => {
+      if (!req.token.role.includes('instructor'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+      if (!isUUID(lectureuuid)) return res.status(401).send('unauthorized uuid') // supply valid data
+
+      // first we have to check, whether some information about the applets is already set
+      const details = await this.getLectureDetails(lectureuuid)
+      if (!details) return res.status(404).send('not found')
+      try {
+        const body = {}
+        const [{ sha256, mimeType } = {}] = await this.handleFileUpload(
+          req,
+          body,
+          { filename: true, id: true, applets: true, name: true },
+          {},
+          ['file'],
+          this.maxFileSize,
+          ['application/x-ipynb+json']
+        )
+
+        const applets = JSON.parse(body.applets)
+        let oldsha
+        const oldNotebook = details?.ipynbs?.find((el) => el.id === body.id)
+        if (oldNotebook?.sha) {
+          oldsha = oldNotebook?.sha
+        }
+        applets?.forEach?.((applet) => {
+          if (typeof applet.presentToStudents !== 'undefined') return
+          const oldApplet = oldNotebook?.applets?.find?.(
+            (appl) => appl.appid === applet.appid
+          )
+          if (typeof oldApplet?.presentToStudents !== 'undefined')
+            applet.presentToStudents = oldApplet.presentToStudents
+          else applet.presentToStudents = false
+        })
+        const pynb = {
+          id: body.id,
+          name: body.name,
+          sha: sha256,
+          mimetype: mimeType,
+          filename: body.filename,
+          presentDownload:
+            oldNotebook?.presentDownload || body.presentDownload || 'no',
+          note: oldNotebook?.note || '',
+          applets
+        }
+        const lecturescol = this.mongo.collection('lectures')
+        // date
+        if (!details?.ipynbs) {
+          await lecturescol.updateOne(
+            { uuid: lectureuuid },
+            {
+              $addToSet: {
+                ipynbs: { id: pynb.id }
+              },
+              $currentDate: { lastaccess: true }
+            }
+          )
+        }
+        await lecturescol.updateOne(
+          { uuid: lectureuuid },
+          {
+            $set: {
+              'ipynbs.$[elem]': { id: pynb.id, ...pynb }
+            },
+            $currentDate: { lastaccess: true }
+          },
+          {
+            arrayFilters: [{ 'elem.id': pynb.id }]
+          }
+        )
+        if (oldsha) {
+          const ipynb = [oldsha.toString('hex')]
+          await this.redis.sAdd('checkdel:ipynb', ipynb)
+        }
+        return res.status(200).json({}) // no return just success
+      } catch (error) {
+        console.log('upload ipynb error', error)
+        return res.status(500).send('error uploading ipynb ' + error)
       }
     })
   }
