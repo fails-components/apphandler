@@ -998,17 +998,15 @@ export class AppHandler {
         }
         const lecturescol = this.mongo.collection('lectures')
         // date
-        if (!details?.ipynbs) {
-          await lecturescol.updateOne(
-            { uuid: lectureuuid },
-            {
-              $addToSet: {
-                ipynbs: { id: pynb.id }
-              },
-              $currentDate: { lastaccess: true }
-            }
-          )
-        }
+        await lecturescol.updateOne(
+          { uuid: lectureuuid, 'ipynbs.id': { $ne: pynb.id } },
+          {
+            $addToSet: {
+              ipynbs: { id: pynb.id }
+            },
+            $currentDate: { lastaccess: true }
+          }
+        )
         await lecturescol.updateOne(
           { uuid: lectureuuid },
           {
