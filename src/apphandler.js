@@ -255,7 +255,7 @@ export class AppHandler {
           if (
             !data.ipynbs.id ||
             typeof data.ipynbs.id !== 'string' ||
-            data.ipynbs.id.length > 20
+            data.ipynbs.id.length > 9
           )
             return res.status(400).send('malformed request')
 
@@ -976,15 +976,21 @@ export class AppHandler {
         if (oldNotebook?.sha) {
           oldsha = oldNotebook?.sha
         }
-        applets?.forEach?.((applet) => {
-          if (typeof applet.presentToStudents !== 'undefined') return
-          const oldApplet = oldNotebook?.applets?.find?.(
-            (appl) => appl.appid === applet.appid
-          )
-          if (typeof oldApplet?.presentToStudents !== 'undefined')
-            applet.presentToStudents = oldApplet.presentToStudents
-          else applet.presentToStudents = false
-        })
+        applets
+          ?.forEach?.((applet) => {
+            if (typeof applet.presentToStudents !== 'undefined') return
+            const oldApplet = oldNotebook?.applets?.find?.(
+              (appl) => appl.appid === applet.appid
+            )
+            if (typeof oldApplet?.presentToStudents !== 'undefined')
+              applet.presentToStudents = oldApplet.presentToStudents
+            else applet.presentToStudents = false
+          })
+          ?.map?.((el) => ({
+            appid: el.appid,
+            appname: el.appname,
+            presentToStudents: el.presentToStudents
+          }))
         const pynb = {
           id: body.id,
           name: body.name,
