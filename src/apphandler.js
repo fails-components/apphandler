@@ -1035,6 +1035,144 @@ export class AppHandler {
         return res.status(500).send('error uploading ipynb ' + error)
       }
     })
+    app.get(path + '/cloudstatus', async (req, res) => {
+      if (!req.token.role.includes('administrator'))
+        return res.status(401).send('unauthorized')
+      const lectureuuid = req.token.course.lectureuuid
+
+      let lectcursor = 0
+      try {
+        // ok, what do we need:
+        // First status of all routers their capacity and their usage
+        const getRouterDetails = async () => {
+          const routercol = this.mongo.collection('avsrouters')
+
+          const cursor = routercol.find(
+            {},
+            {
+              projection: {
+                _id: 0,
+                url: 1,
+                region: 1,
+                numClients: 1,
+                localClients: 1,
+                remoteClients: 1,
+                primaryRealms: 1 // Realm is lecture id
+              }
+            }
+          )
+
+          const routers = []
+          while (await cursor.hasNext()) {
+            const {
+              region,
+              localClients,
+              remoteClients,
+              numClients,
+              primaryRealms,
+              url
+            } = await cursor.next()
+            const isPrimary = (primaryRealms || []).includes(lectureuuid)
+
+            routers.push({
+              url,
+              isPrimary,
+              region,
+              numClients: numClients ?? 0,
+              numLocalClients: localClients?.length ?? 0,
+              numRemoteClients: remoteClients?.length ?? 0,
+              primaryLectureNum: primaryRealms?.length ?? 0
+            })
+          }
+
+          return routers
+        }
+
+        // second, status of all concurrently running lectures
+        const getLectDetails = async () => {
+          const lecturescol = this.mongo.collection('lectures')
+          const lectureDetails = []
+          do {
+            const scanret = await this.redis.scan(lectcursor, {
+              MATCH: 'lecture:????????-????-????-????-????????????:notescreens',
+              COUNT: 40
+            })
+            const lectuuids = scanret.keys.map((el) => el.slice(8, 44))
+            const nowborder1 = Date.now() - 20 * 60 * 1000
+            const nowborder2 = Date.now() - 5 * 60 * 1000 - 10 * 1000
+            // perfect, we can now get the number of clients for each of them
+            const addLectureDetails = await Promise.all(
+              lectuuids.map(async (uuid) => {
+                const pnumberOfNotescreens = this.redis
+                  .sMembers('lecture:' + uuid + ':notescreens')
+                  .then((screens) => {
+                    return Promise.all(
+                      screens.map((screen) => {
+                        return this.redis.hmGet(
+                          'lecture:' + uuid + ':notescreen:' + screen,
+                          ['active', 'lastaccess']
+                        )
+                      })
+                    )
+                  })
+                  .then((screens) => {
+                    const scr = screens.filter((el) =>
+                      el
+                        ? nowborder1 - Number(el[1]) < 0 && el[0] !== '0'
+                        : false
+                    )
+                    return scr.length
+                  })
+                const pnumberOfIdents = this.redis
+                  .hGetAll('lecture:' + uuid + ':idents')
+                  .then((identobj) => {
+                    return Object.values(identobj)
+                      .map((value) => JSON.parse(value))
+                      .filter((el) => nowborder2 - Number(el.lastaccess) < 0)
+                      .length
+                  })
+
+                const plecturedoc = lecturescol.findOne(
+                  { uuid: uuid },
+                  {
+                    projection: {
+                      _id: 0,
+                      title: 1,
+                      coursetitle: 1
+                    }
+                  }
+                )
+                const [numberOfNotescreens, numberOfIdents, lecturedoc] =
+                  await Promise.all([
+                    pnumberOfNotescreens,
+                    pnumberOfIdents,
+                    plecturedoc
+                  ])
+                // Title and course name would also be great
+                return {
+                  uuid,
+                  numberOfNotescreens,
+                  numberOfIdents,
+                  title: lecturedoc.title,
+                  coursetitle: lecturedoc.coursetitle
+                }
+              })
+            )
+            lectureDetails.push(...addLectureDetails)
+            lectcursor = scanret.cursor
+          } while (lectcursor !== 0)
+          return lectureDetails
+        }
+        const [routerDetails, lectureDetails] = await Promise.all([
+          getRouterDetails(),
+          getLectDetails()
+        ])
+        return res.status(200).json({ routerDetails, lectureDetails })
+      } catch (error) {
+        console.log('Problem getting statistics', error)
+        return res.status(500).send('Problem getting statistics: ' + error)
+      }
+    })
   }
 
   async getLectureDetails(uuid) {
