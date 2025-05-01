@@ -427,6 +427,22 @@ export class AppHandler {
           }
           await lecturescol.updateOne({ uuid: lectureuuid }, tochange)
         }
+        if (data.editDisplaynames) {
+          if (
+            !Array.isArray(data.editDisplaynames) ||
+            !(data.editDisplaynames?.length >= 1) ||
+            !req.token?.user?.displayname ||
+            data.editDisplaynames.some((el) => typeof el !== 'string')
+          )
+            return res.status(400).send('malformed request')
+          if (!data.editDisplaynames.includes(req.token?.user?.displayname)) {
+            data.editDisplaynames.shift(req.token?.user?.displayname)
+          }
+          await lecturescol.updateOne(
+            { uuid: lectureuuid },
+            { $set: { ownersdisplaynames: data.editDisplaynames } }
+          )
+        }
         /* if (shouldpatch) {
                      
                          
@@ -1073,6 +1089,12 @@ export class AppHandler {
               url
             } = await cursor.next()
             const isPrimary = (primaryRealms || []).includes(lectureuuid)
+            console.log(
+              'debug is primary',
+              primaryRealms,
+              lectureuuid,
+              (primaryRealms || []).includes(lectureuuid)
+            )
 
             routers.push({
               url,
