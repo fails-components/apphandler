@@ -1071,6 +1071,7 @@ export class AppHandler {
                 url: 1,
                 region: 1,
                 numClients: 1,
+                maxClients: 1,
                 localClients: 1,
                 remoteClients: 1,
                 primaryRealms: 1 // Realm is lecture id
@@ -1085,22 +1086,18 @@ export class AppHandler {
               localClients,
               remoteClients,
               numClients,
+              maxClients,
               primaryRealms,
               url
             } = await cursor.next()
             const isPrimary = (primaryRealms || []).includes(lectureuuid)
-            console.log(
-              'debug is primary',
-              primaryRealms,
-              lectureuuid,
-              (primaryRealms || []).includes(lectureuuid)
-            )
 
             routers.push({
               url,
               isPrimary,
               region,
               numClients: numClients ?? 0,
+              maxClients: maxClients ?? 0,
               numLocalClients: localClients?.length ?? 0,
               numRemoteClients: remoteClients?.length ?? 0,
               primaryLectureNum: primaryRealms?.length ?? 0
