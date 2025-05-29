@@ -45,6 +45,26 @@ export class AppHandler {
     return this.fixednotesURL
   }
 
+  async autoaddfeatures(oldfeatures) {
+    const newfeatures = [...oldfeatures]
+
+    // check, if we have global avs feature
+    try {
+      const routercol = this.mongo.collection('avsrouters')
+      const firstrouter = await routercol.findOne(
+        {},
+        { projection: { _id: 1 } }
+      )
+      console.log('firstrouter', firstrouter)
+      if (firstrouter) {
+        newfeatures.push('avbroadcast')
+      }
+    } catch (error) {
+      console.log('We troubles to determine status of avs routers', error)
+    }
+    return newfeatures
+  }
+
   installHandlers(path, app) {
     // secure the lecture permissions
     app.use(path + '/lecture', (req, res, next) => {
@@ -87,6 +107,7 @@ export class AppHandler {
       const lectureuuid = req.token.course.lectureuuid
       if (!isUUID(lectureuuid)) return res.status(400).send('unauthorized uuid') // supply valid data
       const oldtoken = req.token
+      const features = await this.autoaddfeatures(oldtoken.features)
 
       const lecturetokendata = {
         user: oldtoken.user,
@@ -94,7 +115,7 @@ export class AppHandler {
         name: 'Primary Notebook',
         lectureuuid: lectureuuid,
         appversion: oldtoken.appversion,
-        features: oldtoken.features,
+        features,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         notepadhandler: this.notepadURL(lectureuuid)
@@ -110,6 +131,7 @@ export class AppHandler {
       const lectureuuid = req.token.course.lectureuuid
       if (!isUUID(lectureuuid)) return res.status(400).send('unauthorized uuid') // supply valid data
       const oldtoken = req.token
+      const features = await autoaddfeatures(oldtoken.features)
 
       const lecturetokendata = {
         user: oldtoken.user,
@@ -117,7 +139,7 @@ export class AppHandler {
         name: 'Notes',
         lectureuuid: lectureuuid,
         appversion: oldtoken.appversion,
-        features: oldtoken.features,
+        features,
         maxrenew: 288, // 24-48h, depending on renewal frequency
         notescreenuuid: uuidv4(),
         noteshandler: this.notesURL(lectureuuid)
