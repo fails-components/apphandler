@@ -131,7 +131,7 @@ export class AppHandler {
       const lectureuuid = req.token.course.lectureuuid
       if (!isUUID(lectureuuid)) return res.status(400).send('unauthorized uuid') // supply valid data
       const oldtoken = req.token
-      const features = await autoaddfeatures(oldtoken.features)
+      const features = await this.autoaddfeatures(oldtoken.features)
 
       const lecturetokendata = {
         user: oldtoken.user,
