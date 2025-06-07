@@ -1096,6 +1096,7 @@ export class AppHandler {
                 maxClients: 1,
                 localClients: 1,
                 remoteClients: 1,
+                numRouterClients: 1,
                 primaryRealms: 1 // Realm is lecture id
               }
             }
@@ -1107,6 +1108,7 @@ export class AppHandler {
               region,
               localClients,
               remoteClients,
+              numRouterClients,
               numClients,
               maxClients,
               primaryRealms,
@@ -1122,6 +1124,7 @@ export class AppHandler {
               maxClients: maxClients ?? 0,
               numLocalClients: localClients?.length ?? 0,
               numRemoteClients: remoteClients?.length ?? 0,
+              numRouterClients: numRouterClients ?? 0,
               primaryLectureNum: primaryRealms?.length ?? 0
             })
           }
