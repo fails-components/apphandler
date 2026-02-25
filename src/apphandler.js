@@ -155,11 +155,13 @@ export class AppHandler {
 
       const user = req.token.user
 
+      const features = await this.autoaddfeatures(req.token.features)
+
       const payload = {
         uuid: lectureuuid,
-        user: user,
+        user,
         appversion: req.token.appversion,
-        features: req.token.features
+        features
       }
       if (!req.body.id || !/[A-Za-z0-9+/]/g.test(req.body.id))
         return res.status(400).send('malformed id')
